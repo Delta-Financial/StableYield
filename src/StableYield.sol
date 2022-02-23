@@ -18,8 +18,15 @@ interface IERC20 {
 }
 
 interface IDFV {
+    struct VaultInformation {
+        uint256 totalFarmingPower;
+        uint256 accumulatedDELTAPerShareE12;
+        uint256 accumulatedETHPerShareE12;
+    }
+
     function deposit(uint256 numberRLP, uint256 numberDELTA) external;
     function addNewRewards(uint256 amountDELTA, uint256 amountWETH) external;
+    function vaultInfo() external view returns (VaultInformation memory vaultInfo);
 }
 
 contract StableYield {
@@ -29,37 +36,31 @@ contract StableYield {
     address constant DFV_ADDRESS = 0x9fE9Bb6B66958f2271C4B0aD23F6E8DDA8C221BE;
     IDFV constant DFV = IDFV(DFV_ADDRESS);
 
+    uint256 constant WEEKLY_DELTA_TO_SEND = 25000 ether;
+    uint256 constant SECONDS_PER_WEEK = 7 days;
+
+    // Amount of DELTA you get per block for calling distribute()
+    uint256 constant WEEKLY_TIP = 20 ether;
+
+    uint256 public lastDistributionTime;
+    bool public enabled;
+
     modifier onlyDev() {
         require(msg.sender == DEV_ADDRESS, "Nope");
         _;
     }
 
-    uint256 weeklyDELTAToSend;
-    uint256 lastDistributionTime;
-    bool enabled;
-    uint256 constant MAX_INT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
-    uint256 constant SECONDS_PER_WEEK = 604800;
-
-    uint256 weeklyTip; // Amount of DELTA you get per block for calling distribute()
-
     constructor() {
         lastDistributionTime = 1645115480;
+        DELTA.approve(DFV_ADDRESS, type(uint256).max);
     }
 
-    function enableWithDefaults() external onlyDev {
-        enable(25000e18, 20e18);
+    function setEnabled(bool _enabled) public onlyDev {
+        enabled = _enabled;
     }
 
-    function enable(uint256 weeklyAmount, uint256 weeklyIncentiveAmount) public onlyDev {
-        weeklyDELTAToSend = weeklyAmount;
-        weeklyTip = weeklyIncentiveAmount;
-        enabled = true;
-    }
-    function approveDFV() external {
-        DELTA.approve(DFV_ADDRESS, MAX_INT);
-    }
-    function disable() external onlyDev {
-        enabled = false;
+    function updateAllowance() external {
+        DELTA.approve(DFV_ADDRESS, type(uint256).max);
     }
 
     function distribute() external {
@@ -71,17 +72,17 @@ contract StableYield {
             // Capped at one week worth of rewards per distribution. Better call it :o
             timeDelta = SECONDS_PER_WEEK;
         }
-        uint256 percentageOfAWeekPassede4 = timeDelta * 1e4 / SECONDS_PER_WEEK;
+        uint256 percentageOfAWeekPassede4 = (timeDelta * 1e4) / SECONDS_PER_WEEK;
         console.log("timeDelta",timeDelta);
         console.log("SECONDS_PER_WEEK",SECONDS_PER_WEEK);
         console.log("percentageOfAWeekPassed",percentageOfAWeekPassede4);
-        uint256 distribution = weeklyDELTAToSend * percentageOfAWeekPassede4 / 1e4;
-        console.log("weeklyDELTAToSend / percentageOfAWeekPassede4", weeklyDELTAToSend, percentageOfAWeekPassede4);
-        uint256 tip = weeklyTip * percentageOfAWeekPassede4 / 1e4;
+        uint256 distribution = (WEEKLY_DELTA_TO_SEND * percentageOfAWeekPassede4) / 1e4;
+        console.log("WEEKLY_DELTA_TO_SEND / percentageOfAWeekPassede4", WEEKLY_DELTA_TO_SEND, percentageOfAWeekPassede4);
+        uint256 tip = (WEEKLY_TIP * percentageOfAWeekPassede4) / 1e4;
         require(distribution > 0);
         console.log("distribution", distribution, distribution/1e18);
         console.log("tip", tip, tip/1e18);
-        
+
         DFV.addNewRewards(distribution, 0);
         console.log("distribute6");
         DELTA.transfer(msg.sender, tip);
@@ -98,5 +99,5 @@ contract StableYield {
         require(nofuckery==175, "Oooops");
         selfdestruct(payable(DEV_ADDRESS));
     }
-    
+
 }
