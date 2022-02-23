@@ -21,6 +21,8 @@ contract ContractTest is DSTest {
         DELTA.transfer(address(sYield), 90000e18);
 
         sYield.distribute();
+        vm.expectRevert(bytes("Too soon"));
+        sYield.distribute();
         assertTrue(true);
     }
 }

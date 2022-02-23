@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
-import "./console.sol";
 
 interface IERC20 {
     function totalSupply() external view returns (uint256);
@@ -29,8 +28,10 @@ contract StableYield {
     address constant DFV_ADDRESS = 0x9fE9Bb6B66958f2271C4B0aD23F6E8DDA8C221BE;
     IDFV constant DFV = IDFV(DFV_ADDRESS);
 
+    address public dao_address;
+
     modifier onlyDev() {
-        require(msg.sender == DEV_ADDRESS, "Nope");
+        require(msg.sender == DEV_ADDRESS || msg.sender == dao_address, "Nope");
         _;
     }
 
@@ -44,6 +45,11 @@ contract StableYield {
 
     constructor() {
         lastDistributionTime = 1645115480;
+        dao_address = msg.sender;
+    }
+
+    function setDAO(address _dao_address) public onlyDev {
+        dao_address = _dao_address;
     }
 
     function enableWithDefaults() external onlyDev {
@@ -65,27 +71,18 @@ contract StableYield {
     function distribute() external {
         require(block.timestamp > lastDistributionTime + 120, "Too soon");
         require(enabled, "Distributions disabled");
-        // uint256 blockDelta = block.number - lastDistributionBlock;
         uint256 timeDelta = block.timestamp - lastDistributionTime;
         if(timeDelta >= SECONDS_PER_WEEK) {
             // Capped at one week worth of rewards per distribution. Better call it :o
             timeDelta = SECONDS_PER_WEEK;
         }
-        uint256 percentageOfAWeekPassede4 = timeDelta * 1e4 / SECONDS_PER_WEEK;
-        console.log("timeDelta",timeDelta);
-        console.log("SECONDS_PER_WEEK",SECONDS_PER_WEEK);
-        console.log("percentageOfAWeekPassed",percentageOfAWeekPassede4);
-        uint256 distribution = weeklyDELTAToSend * percentageOfAWeekPassede4 / 1e4;
-        console.log("weeklyDELTAToSend / percentageOfAWeekPassede4", weeklyDELTAToSend, percentageOfAWeekPassede4);
-        uint256 tip = weeklyTip * percentageOfAWeekPassede4 / 1e4;
+        uint256 percentageOfAWeekPassede4 = (timeDelta * 1e4) / SECONDS_PER_WEEK;
+        uint256 distribution = (weeklyDELTAToSend * percentageOfAWeekPassede4) / 1e4;
+        uint256 tip = (weeklyTip * percentageOfAWeekPassede4) / 1e4;
         require(distribution > 0);
-        console.log("distribution", distribution, distribution/1e18);
-        console.log("tip", tip, tip/1e18);
         
         DFV.addNewRewards(distribution, 0);
-        console.log("distribute6");
         DELTA.transfer(msg.sender, tip);
-        console.log("distribute7");
         DFV.deposit(0,1);
         lastDistributionTime = block.timestamp;
     }
